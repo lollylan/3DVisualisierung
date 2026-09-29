@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Praxis-Kennzahlen im Raum</title>
+  <meta name="description" content="Praxis-Kennzahlen als 3D-Diagramm im Raum – WebXR-Demo für Meta Quest 3 mit fiktiven Daten.">
+  <meta name="theme-color" content="#04161C">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23025669'/%3E%3Crect x='7' y='16' width='4' height='9' fill='%2346C9E1'/%3E%3Crect x='14' y='10' width='4' height='15' fill='%2346C9E1'/%3E%3Crect x='21' y='6' width='4' height='19' fill='%23E48A52'/%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/barlow-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/barlow-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    @font-face { font-family: 'Barlow'; font-weight: 500; font-display: swap; src: url(fonts/barlow-latin-500-normal.woff2) format('woff2'); }
+    @font-face { font-family: 'Barlow'; font-weight: 600; font-display: swap; src: url(fonts/barlow-latin-600-normal.woff2) format('woff2'); }
+    @font-face { font-family: 'Barlow'; font-weight: 700; font-display: swap; src: url(fonts/barlow-latin-700-normal.woff2) format('woff2'); }
+    @font-face { font-family: 'Merriweather'; font-weight: 700; font-display: swap; src: url(fonts/merriweather-latin-700-normal.woff2) format('woff2'); }
+
+    :root {
+      --bg-deep: #030C10;
+      --bg-lift: #0A2B34;
+      --ink: #E9F5F8;
+      --ink-muted: #9CC7D2;
+      --petrol: #025669;
+      --petrol-light: #03758F;
+      --glow: #46C9E1;
+      --copper: #BB4E26;
+      --copper-light: #D4713F;
+      --copper-glow: #E48A52;
+      --gutter: clamp(16px, 3.2vw, 40px);
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background:
+        radial-gradient(120% 90% at 48% 38%, var(--bg-lift) 0%, #06181E 45%, var(--bg-deep) 100%);
+      color: var(--ink);
+      font: 500 16px/1.5 Barlow, "Segoe UI", sans-serif;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: var(--copper-light); color: #fff; }
+
+    #stage { position: fixed; inset: 0; }
+    #stage canvas { display: block; touch-action: none; }
+
+    .overlay {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: var(--gutter);
+      opacity: 0;
+      transition: opacity 600ms var(--ease-out);
+    }
+    body.ready .overlay { opacity: 1; }
+    body.in-xr .overlay { opacity: 0; }
+    .overlay button, .overlay a { pointer-events: auto; }
+
+    header { max-width: 34rem; }
+    h1 {
+      font: 700 clamp(1.5rem, 1.1rem + 1.6vw, 2.35rem)/1.15 Merriweather, Georgia, serif;
+      margin: 0 0 0.45rem;
+      letter-spacing: -0.01em;
+      text-wrap: balance;
+    }
+    header p { margin: 0; color: var(--ink-muted); font-size: 1.05rem; max-width: 60ch; }
+
+    footer {
+      display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between;
+      gap: 1rem 2rem;
+    }
+    .enter { display: grid; gap: 0.6rem; justify-items: start; }
+    #enter-xr {
+      font: 700 1.2rem/1 Barlow, sans-serif;
+      letter-spacing: 0.01em;
+      color: #fff;
+      background: var(--copper);
+      border: 0;
+      border-radius: 999px;
+      padding: 1.05rem 1.9rem 1.1rem;
+      cursor: pointer;
+      box-shadow: 0 10px 30px -10px rgba(212, 113, 63, 0.7), 0 2px 6px rgba(0, 0, 0, 0.4);
+      transition: background 180ms var(--ease-out), transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
+    }
+    #enter-xr:hover:not(:disabled) { background: var(--copper-light); transform: translateY(-1px); box-shadow: 0 14px 34px -10px rgba(228, 138, 82, 0.8), 0 2px 6px rgba(0,0,0,0.4); }
+    #enter-xr:active:not(:disabled) { transform: translateY(1px); }
+    #enter-xr:focus-visible { outline: 3px solid var(--glow); outline-offset: 4px; }
+    #enter-xr:disabled { background: #2A3F45; color: #9AB2B8; cursor: not-allowed; box-shadow: none; }
+    #xr-status { margin: 0; color: var(--ink-muted); font-size: 0.95rem; max-width: 46ch; min-height: 1.5em; }
+
+    .keys {
+      margin: 0; padding: 0; list-style: none;
+      display: grid; grid-template-columns: auto auto; gap: 0.3rem 0.9rem;
+      color: var(--ink-muted); font-size: 0.9rem;
+    }
+    .keys kbd {
+      font: 600 0.8rem/1 Barlow, sans-serif; color: var(--ink);
+      background: rgba(70, 201, 225, 0.12);
+      border: 1px solid rgba(70, 201, 225, 0.28);
+      border-radius: 6px; padding: 0.25rem 0.45rem;
+      font-variant-numeric: tabular-nums;
+      justify-self: end;
+    }
+    body.touring .keys { opacity: 0.35; }
+
+    #error {
+      position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      max-width: min(34rem, calc(100vw - 32px));
+      background: #2A0F06; color: #FFE3D4; border: 1px solid var(--copper-light);
+      border-radius: 14px; padding: 1.1rem 1.3rem; line-height: 1.45;
+    }
+
+    @media (max-width: 640px) {
+      .keys { display: none; }
+      #enter-xr { width: 100%; }
+      .enter { width: 100%; justify-items: stretch; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .overlay, #enter-xr { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <div class="overlay">
+    <header>
+      <h1>Praxis-Kennzahlen im Raum</h1>
+      <p>Umsatz, Scheine und Sprechstunden einer Hausarztpraxis als Hologramm. Alle Zahlen sind fiktiv.</p>
+    </header>
+    <div></div>
+    <footer>
+      <div class="enter">
+        <button id="enter-xr" type="button" disabled>In den Raum holen</button>
+        <p id="xr-status" role="status">Prüfe WebXR …</p>
+      </div>
+      <ul class="keys" aria-label="Tastenkürzel am Desktop">
+        <li><kbd>Ziehen</kbd></li><li>Ansicht drehen</li>
+        <li><kbd>Klick</kbd></li><li>Balken: Wert anzeigen</li>
+        <li><kbd>1–5</kbd></li><li>Ansicht wechseln</li>
+        <li><kbd>R</kbd></li><li>Neu aufbauen</li>
+        <li><kbd>T</kbd></li><li>Automatische Tour (für Video)</li>
+      </ul>
+    </footer>
+  </div>
+
+  <div id="error" role="alert" hidden></div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
