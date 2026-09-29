@@ -176,7 +176,9 @@ Simuliert eine **Meta Quest 3** mit Metas WebXR-Emulations-Runtime ([iwer](https
 
 ### Deployment
 
-Jeder Push auf `main` veröffentlicht über die GitHub Action [`.github/workflows/pages.yml`](.github/workflows/pages.yml) nach **https://lollylan.github.io/3DVisualisierung/**. Veröffentlicht werden nur `index.html`, `sw.js`, `data.json`, `src/`, `fonts/` und `beispiele/`.
+GitHub Pages veröffentlicht direkt aus dem Branch `main` (Wurzelverzeichnis, Einstellung *Settings → Pages → Deploy from a branch*). Jeder Push ist nach ca. 1 Minute unter **https://lollylan.github.io/3DVisualisierung/** live. Die leere Datei `.nojekyll` sorgt dafür, dass GitHub die Dateien unverändert ausliefert.
+
+Warum keine GitHub Action? Für das Konto sind GitHub Actions derzeit deaktiviert („Actions has been disabled for this user“), deshalb die Branch-Variante. Sie braucht keine Action und reicht für eine statische Seite völlig.
 
 ---
 
