@@ -1,0 +1,402 @@
+{
+  "meta": {
+    "title": "Hausarztpraxis – Demodaten",
+    "note": "Fiktive Zahlen, keine echten Praxisdaten.",
+    "currency": "EUR"
+  },
+  "settings": {
+    "indexMode": false
+  },
+  "years": [
+    2023,
+    2024,
+    2025
+  ],
+  "monthly": [
+    {
+      "year": 2023,
+      "month": 1,
+      "umsatz_hzv": 28598,
+      "umsatz_kv": 39052,
+      "umsatz_privat": 7771,
+      "scheine": 1265
+    },
+    {
+      "year": 2023,
+      "month": 2,
+      "umsatz_hzv": 23183,
+      "umsatz_kv": 31719,
+      "umsatz_privat": 6429,
+      "scheine": 1193
+    },
+    {
+      "year": 2023,
+      "month": 3,
+      "umsatz_hzv": 19768,
+      "umsatz_kv": 28248,
+      "umsatz_privat": 6263,
+      "scheine": 1023
+    },
+    {
+      "year": 2023,
+      "month": 4,
+      "umsatz_hzv": 25802,
+      "umsatz_kv": 35773,
+      "umsatz_privat": 7121,
+      "scheine": 1106
+    },
+    {
+      "year": 2023,
+      "month": 5,
+      "umsatz_hzv": 19680,
+      "umsatz_kv": 27345,
+      "umsatz_privat": 5766,
+      "scheine": 965
+    },
+    {
+      "year": 2023,
+      "month": 6,
+      "umsatz_hzv": 18419,
+      "umsatz_kv": 24265,
+      "umsatz_privat": 5046,
+      "scheine": 918
+    },
+    {
+      "year": 2023,
+      "month": 7,
+      "umsatz_hzv": 23206,
+      "umsatz_kv": 29565,
+      "umsatz_privat": 6545,
+      "scheine": 935
+    },
+    {
+      "year": 2023,
+      "month": 8,
+      "umsatz_hzv": 17443,
+      "umsatz_kv": 22470,
+      "umsatz_privat": 4679,
+      "scheine": 820
+    },
+    {
+      "year": 2023,
+      "month": 9,
+      "umsatz_hzv": 19193,
+      "umsatz_kv": 24804,
+      "umsatz_privat": 5654,
+      "scheine": 954
+    },
+    {
+      "year": 2023,
+      "month": 10,
+      "umsatz_hzv": 27660,
+      "umsatz_kv": 36602,
+      "umsatz_privat": 7628,
+      "scheine": 1158
+    },
+    {
+      "year": 2023,
+      "month": 11,
+      "umsatz_hzv": 22306,
+      "umsatz_kv": 29211,
+      "umsatz_privat": 6936,
+      "scheine": 1098
+    },
+    {
+      "year": 2023,
+      "month": 12,
+      "umsatz_hzv": 18286,
+      "umsatz_kv": 23794,
+      "umsatz_privat": 5353,
+      "scheine": 963
+    },
+    {
+      "year": 2024,
+      "month": 1,
+      "umsatz_hzv": 31149,
+      "umsatz_kv": 34848,
+      "umsatz_privat": 8835,
+      "scheine": 1250
+    },
+    {
+      "year": 2024,
+      "month": 2,
+      "umsatz_hzv": 24892,
+      "umsatz_kv": 29548,
+      "umsatz_privat": 7106,
+      "scheine": 1127
+    },
+    {
+      "year": 2024,
+      "month": 3,
+      "umsatz_hzv": 24235,
+      "umsatz_kv": 27764,
+      "umsatz_privat": 5880,
+      "scheine": 1078
+    },
+    {
+      "year": 2024,
+      "month": 4,
+      "umsatz_hzv": 29633,
+      "umsatz_kv": 32533,
+      "umsatz_privat": 7835,
+      "scheine": 1125
+    },
+    {
+      "year": 2024,
+      "month": 5,
+      "umsatz_hzv": 22462,
+      "umsatz_kv": 26264,
+      "umsatz_privat": 5951,
+      "scheine": 993
+    },
+    {
+      "year": 2024,
+      "month": 6,
+      "umsatz_hzv": 22720,
+      "umsatz_kv": 23963,
+      "umsatz_privat": 6178,
+      "scheine": 971
+    },
+    {
+      "year": 2024,
+      "month": 7,
+      "umsatz_hzv": 27735,
+      "umsatz_kv": 29696,
+      "umsatz_privat": 7280,
+      "scheine": 977
+    },
+    {
+      "year": 2024,
+      "month": 8,
+      "umsatz_hzv": 20394,
+      "umsatz_kv": 22907,
+      "umsatz_privat": 5233,
+      "scheine": 834
+    },
+    {
+      "year": 2024,
+      "month": 9,
+      "umsatz_hzv": 23778,
+      "umsatz_kv": 25451,
+      "umsatz_privat": 5648,
+      "scheine": 996
+    },
+    {
+      "year": 2024,
+      "month": 10,
+      "umsatz_hzv": 32450,
+      "umsatz_kv": 36348,
+      "umsatz_privat": 7782,
+      "scheine": 1213
+    },
+    {
+      "year": 2024,
+      "month": 11,
+      "umsatz_hzv": 29635,
+      "umsatz_kv": 30519,
+      "umsatz_privat": 7989,
+      "scheine": 1233
+    },
+    {
+      "year": 2024,
+      "month": 12,
+      "umsatz_hzv": 24171,
+      "umsatz_kv": 26503,
+      "umsatz_privat": 5967,
+      "scheine": 1102
+    },
+    {
+      "year": 2025,
+      "month": 1,
+      "umsatz_hzv": 42013,
+      "umsatz_kv": 39679,
+      "umsatz_privat": 9658,
+      "scheine": 1446
+    },
+    {
+      "year": 2025,
+      "month": 2,
+      "umsatz_hzv": 34649,
+      "umsatz_kv": 32804,
+      "umsatz_privat": 7786,
+      "scheine": 1334
+    },
+    {
+      "year": 2025,
+      "month": 3,
+      "umsatz_hzv": 27718,
+      "umsatz_kv": 27410,
+      "umsatz_privat": 6778,
+      "scheine": 1104
+    },
+    {
+      "year": 2025,
+      "month": 4,
+      "umsatz_hzv": 34324,
+      "umsatz_kv": 33643,
+      "umsatz_privat": 8632,
+      "scheine": 1160
+    },
+    {
+      "year": 2025,
+      "month": 5,
+      "umsatz_hzv": 27552,
+      "umsatz_kv": 26377,
+      "umsatz_privat": 7047,
+      "scheine": 1059
+    },
+    {
+      "year": 2025,
+      "month": 6,
+      "umsatz_hzv": 24970,
+      "umsatz_kv": 24166,
+      "umsatz_privat": 5737,
+      "scheine": 979
+    },
+    {
+      "year": 2025,
+      "month": 7,
+      "umsatz_hzv": 31619,
+      "umsatz_kv": 29385,
+      "umsatz_privat": 7437,
+      "scheine": 1005
+    },
+    {
+      "year": 2025,
+      "month": 8,
+      "umsatz_hzv": 23628,
+      "umsatz_kv": 21423,
+      "umsatz_privat": 5142,
+      "scheine": 847
+    },
+    {
+      "year": 2025,
+      "month": 9,
+      "umsatz_hzv": 27196,
+      "umsatz_kv": 24919,
+      "umsatz_privat": 5919,
+      "scheine": 1036
+    },
+    {
+      "year": 2025,
+      "month": 10,
+      "umsatz_hzv": 38687,
+      "umsatz_kv": 35808,
+      "umsatz_privat": 8457,
+      "scheine": 1275
+    },
+    {
+      "year": 2025,
+      "month": 11,
+      "umsatz_hzv": 34269,
+      "umsatz_kv": 29224,
+      "umsatz_privat": 8494,
+      "scheine": 1235
+    },
+    {
+      "year": 2025,
+      "month": 12,
+      "umsatz_hzv": 28442,
+      "umsatz_kv": 24168,
+      "umsatz_privat": 6716,
+      "scheine": 1089
+    }
+  ],
+  "heatmap": {
+    "title": "Patientenkontakte je Stunde",
+    "unit": "Kontakte (Ø pro Woche)",
+    "days": [
+      "Mo",
+      "Di",
+      "Mi",
+      "Do",
+      "Fr"
+    ],
+    "hours": [
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "values": [
+      [
+        16.8,
+        40.6,
+        47.2,
+        36.6,
+        31.7,
+        14.6,
+        5,
+        7.2,
+        22,
+        25.3,
+        22.3,
+        11.8
+      ],
+      [
+        13.2,
+        32,
+        35.6,
+        32.9,
+        27,
+        11.1,
+        3.7,
+        6,
+        17.2,
+        21.2,
+        19.1,
+        9.6
+      ],
+      [
+        14.4,
+        32.9,
+        36.3,
+        31.5,
+        26.9,
+        12.1,
+        2.4,
+        2.5,
+        2.3,
+        2.5,
+        2.5,
+        2.2
+      ],
+      [
+        14.1,
+        32.1,
+        37.4,
+        32.4,
+        24.2,
+        12.1,
+        4,
+        6.1,
+        16.9,
+        19.2,
+        19.4,
+        9.5
+      ],
+      [
+        12.1,
+        29.3,
+        30.7,
+        27.3,
+        23.5,
+        10.8,
+        2.3,
+        2.1,
+        2.4,
+        2.3,
+        2.3,
+        2.2
+      ]
+    ]
+  }
+}
