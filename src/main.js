@@ -114,7 +114,8 @@ async function main() {
   const DESK_TARGET = new THREE.Vector3(-0.08, 0.16, 0);
   // Hochformat (Handy): Kamera etwas weiter weg und weiterer Blickwinkel, damit das Diagramm hineinpasst.
   // Nicht zu weit zurück, sonst stünden die Stationen hinter dem Betrachter im Bild.
-  const aspect = () => window.innerWidth / window.innerHeight;
+  // Verborgener Tab/Fenster meldet 0 × 0 – dann ein übliches Format annehmen, sonst wird die Kamera NaN
+  const aspect = () => (window.innerWidth > 0 && window.innerHeight > 0 ? window.innerWidth / window.innerHeight : 1.6);
   const portraitK = () => THREE.MathUtils.clamp(1.3 / aspect(), 1, 1.25);
   function fitCamera() {
     camera.aspect = aspect();
@@ -359,6 +360,8 @@ async function main() {
   window.addEventListener('resize', () => {
     fitCamera();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    // Falls die Kamera doch einmal ungültig wurde: neu auf die aktive Station ausrichten
+    if (!renderer.xr.isPresenting && !Number.isFinite(camera.position.x + camera.position.y + camera.position.z)) focus(active, { instant: true });
   });
 
   // ---------- Schleife ----------
