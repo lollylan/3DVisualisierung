@@ -12,10 +12,15 @@ export const CI = {
 };
 
 export const COLORS = {
-  // Balken je Jahr: ältestes Jahr am dunkelsten, aktuelles Jahr am hellsten
-  years: ['#0F6E84', '#1B97B1', '#46C9E1'],
-  // Zweites Segment (KV) in Kupfer-Abstufungen
-  yearsCopper: ['#8E3A1B', '#B9582C', '#E48A52'],
+  // Datenreihen für gestapelte Balken in fester Reihenfolge: Petrol, Kupfer, Ocker, Violett.
+  // Je Reihe drei Stufen: ältestes Jahr am dunkelsten, aktuelles Jahr am hellsten.
+  // Mittlere Stufe geprüft auf Farbsehschwäche, Unterscheidbarkeit und Kontrast zum dunklen Sockel.
+  series: [
+    ['#0F6E84', '#1B97B1', '#46C9E1'],
+    ['#8E3A1B', '#B9582C', '#E48A52'],
+    ['#7E6420', '#B8952F', '#E6C45A'],
+    ['#54448E', '#8672C8', '#B3A3F0'],
+  ],
   heatLow: '#0B4656',
   heatMid: '#2BB0CA',
   heatHot: '#B9582C',
@@ -57,6 +62,7 @@ export async function loadFonts() {
 
 const nf0 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
 const nf1 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const nf2 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 });
 
 export const fmt = {
   int: (v) => nf0.format(v),
@@ -64,6 +70,9 @@ export const fmt = {
   euro: (v) => `${nf0.format(v)} €`,
   percent: (v) => `${nf0.format(v)} %`,
   signedPercent: (v) => `${v >= 0 ? '+' : '−'}${nf1.format(Math.abs(v))} %`,
+  dec: (v) => nf2.format(v),
+  signedInt: (v) => `${v >= 0 ? '+' : '−'}${nf0.format(Math.abs(v))}`,
+  signedNum: (v) => `${v >= 0 ? '+' : '−'}${nf2.format(Math.abs(v))}`,
   signedPoints: (v) => `${v >= 0 ? '+' : '−'}${nf1.format(Math.abs(v))} Pp.`,
   kEuro: (v) => (v === 0 ? '0' : `${nf0.format(v / 1000)} T€`),
 };

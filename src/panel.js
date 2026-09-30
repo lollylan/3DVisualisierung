@@ -78,8 +78,15 @@ export class ButtonPanel extends THREE.Group {
       ctx.strokeStyle = hover ? 'rgba(228,138,82,0.95)' : active ? 'rgba(160,232,245,0.55)' : COLORS.panelEdge;
       ctx.stroke();
 
-      const fs = b.small ? h * 0.36 : h * 0.4;
+      // Schrift verkleinern, falls die Beschriftung sonst über den Rand liefe
+      const maxW = b.small ? w - h * 0.5 : w - h * 0.72 - h * 0.32;
+      let fs = b.small ? h * 0.36 : h * 0.4;
       ctx.font = `${active ? 700 : 600} ${fs}px ${FONT.family}`;
+      const tw = ctx.measureText(b.label).width;
+      if (tw > maxW) {
+        fs *= maxW / tw;
+        ctx.font = `${active ? 700 : 600} ${fs}px ${FONT.family}`;
+      }
       ctx.textBaseline = 'middle';
       ctx.fillStyle = active || hover ? COLORS.ink : '#CFE7ED';
       if (b.small) {

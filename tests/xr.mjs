@@ -1,6 +1,7 @@
 // XR-Test mit der WebXR-Emulations-Runtime von Meta (iwer, Basis des "Immersive Web Emulator").
-// Simuliert eine Meta Quest 3: AR-Session starten, Platzierung prüfen, mit Controller
-// Buttons und Balken anklicken, mit der Hand am Griff ziehen und am Ring drehen.
+// Simuliert eine Meta Quest 3: AR-Session starten, Kreis der Stationen prüfen, mit Controller
+// Buttons und Balken anklicken (auch an einer Nachbarstation), mit der Hand am Griff ziehen,
+// am Ring drehen und eine Station per "Vor mich holen" nach vorne holen.
 // Aufruf: npm run test:xr
 
 import { chromium } from 'playwright';
@@ -78,12 +79,18 @@ try {
   await page.waitForFunction(() => window.__app.renderer.xr.isPresenting && window.__app.chart.visible, null, { timeout: 15000 });
   const place = await page.evaluate(() => {
     const d = window.__xrdevice;
-    const c = window.__app.chart.position;
-    return { head: [d.position.x, d.position.y, d.position.z], chart: [c.x, c.y, c.z] };
+    const all = window.__app.stations.map((st) => st.chart.position.toArray());
+    return { head: [d.position.x, d.position.y, d.position.z], chart: all[0], all };
   });
   const dist = Math.hypot(place.chart[0] - place.head[0], place.chart[2] - place.head[2]);
-  check('Diagramm ca. 1 m vor dem Kopf', Math.abs(dist - 1.05) < 0.05, `${dist.toFixed(2)} m`);
+  const ringR = place.all.length === 1 ? 1.05 : place.all.length <= 5 ? 1.3 : 1.42;
+  check('Erste Station vor dem Kopf', Math.abs(dist - ringR) < 0.05 && place.chart[2] < place.head[2], `${dist.toFixed(2)} m`);
   check('Diagramm auf Tischhöhe', place.chart[1] > 0.4 && place.chart[1] <= 0.81, `y = ${place.chart[1].toFixed(2)} m (Kopf ${place.head[1].toFixed(2)} m)`);
+  const radii = place.all.map((p) => Math.hypot(p[0] - place.head[0], p[2] - place.head[2]));
+  const angles = place.all.map((p) => Math.atan2(p[0] - place.head[0], -(p[2] - place.head[2]))).sort((a, b) => a - b);
+  const gaps = angles.map((a, i) => (i ? a - angles[i - 1] : a - angles[angles.length - 1] + Math.PI * 2));
+  check(`${place.all.length} Stationen im Kreis um den Kopf`, radii.every((x) => Math.abs(x - ringR) < 0.05) && gaps.every((g) => Math.abs(g - (Math.PI * 2) / place.all.length) < 0.05),
+    `Radien ${radii.map((x) => x.toFixed(2)).join('/')} m`);
 
   await page.waitForFunction(() => { const c = window.__app.chart; return c.introT < 0 && c.animDone; }, null, { timeout: 20000 });
   await page.screenshot({ path: `${out}xr-1-placed.png` });
@@ -142,13 +149,46 @@ try {
   check('Drehring dreht das Diagramm', Math.abs(rotAfter - rotBefore) > 0.1, `${((rotAfter - rotBefore) * 180 / Math.PI).toFixed(0)}°`);
   await page.screenshot({ path: `${out}xr-3-moved.png` });
 
+  // Nachbarstation rechts (HZV): Controller-Trigger auf den Button "HZV-Quote"
+  await page.evaluate(() => { window.__xrdevice.primaryInputMode = 'controller'; });
+  await frames(10);
+  await aim('controller', ctrlFrom, `app.stations[1].panel.buttons.find(b => b.id === 'hzv-quote').panel.getWorldPosition(new THREE.Vector3())`);
+  await trigger('controller', true);
+  await trigger('controller', false);
+  await page.waitForTimeout(1200);
+  check('Button an Nachbarstation schaltet deren Ansicht', (await page.evaluate(() => window.__app.stations[1].view)) === 'hzv-quote');
+
+  // "Vor mich holen" an der Nachbarstation: sie gleitet nach vorne
+  await aim('controller', ctrlFrom, `app.stations[1].panel.buttons.find(b => b.id === 'recenter').panel.getWorldPosition(new THREE.Vector3())`);
+  await trigger('controller', true);
+  await trigger('controller', false);
+  await page.waitForTimeout(1800);
+  const front = await page.evaluate(() => {
+    const d = window.__xrdevice;
+    const q = new window.__app.THREE.Quaternion(d.quaternion.x, d.quaternion.y, d.quaternion.z, d.quaternion.w);
+    const f = new window.__app.THREE.Vector3(0, 0, -1).applyQuaternion(q);
+    const p = window.__app.stations[1].chart.position;
+    const v = new window.__app.THREE.Vector3(p.x - d.position.x, 0, p.z - d.position.z).normalize();
+    return v.x * f.x + v.z * f.z;
+  });
+  check('"Vor mich holen" bringt die Station nach vorne', front > 0.95, `cos = ${front.toFixed(3)}`);
+  await page.screenshot({ path: `${out}xr-4-recenter.png` });
+
+  // Station 1 zurück, Station 0 wieder nach vorne holen
+  await aim('controller', ctrlFrom, `app.stations[0].panel.buttons.find(b => b.id === 'recenter').panel.getWorldPosition(new THREE.Vector3())`);
+  await trigger('controller', true);
+  await trigger('controller', false);
+  await page.waitForTimeout(1800);
+
   // Heatmap per Hand-Pinch auf Button
+  await page.evaluate(() => { window.__xrdevice.primaryInputMode = 'hand'; });
+  await frames(10);
   await aim('hand', handFrom, `app.panel.buttons.find(b => b.id === 'heatmap').panel.getWorldPosition(new THREE.Vector3())`);
   await trigger('hand', true);
   await trigger('hand', false);
   await page.waitForTimeout(1600);
   check('Hand-Pinch schaltet auf Heatmap', (await page.evaluate(() => window.__app.view)) === 'heatmap');
-  await page.screenshot({ path: `${out}xr-4-heatmap.png` });
+  await page.screenshot({ path: `${out}xr-5-heatmap.png` });
 } catch (e) {
   problems.push(`Abbruch: ${e.message}`);
 } finally {

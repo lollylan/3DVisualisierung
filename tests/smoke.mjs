@@ -1,6 +1,6 @@
 // Rauchtest der Desktop-Variante mit Playwright/Chromium.
-// Startet den lokalen Server, lädt die Seite, prüft auf Konsolenfehler,
-// klickt einen Balken und alle Ansichten durch und speichert Screenshots in test-results/.
+// Startet den lokalen Server, lädt die Seite, prüft auf Konsolenfehler, fährt alle Stationen ab,
+// klickt dort je einen Balken und alle Ansichten durch und speichert Screenshots in test-results/.
 // Aufruf: npm test
 
 import { chromium } from 'playwright';
@@ -32,13 +32,53 @@ async function run(viewport, tag) {
   await page.waitForTimeout(400); // Intro abwarten
   await page.screenshot({ path: `${out}${tag}-1-start.png` });
 
-  // Echten Mausklick auf einen Balken ausführen (Oktober, letztes Jahr)
+  // Echten Mausklick auf einen Balken der aktiven Station ausführen
+  await clickBar(page, tag, 's0');
+  await page.screenshot({ path: `${out}${tag}-2-tooltip.png` });
+
+  // Alle Stationen per Pfeiltaste abfahren, je Station alle Ansichten per Zifferntaste
+  const N = await page.evaluate(() => window.__app.stations.length);
+  for (let s = 0; s < N; s++) {
+    if (s > 0) {
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(1900);
+      const active = await page.evaluate(() => window.__app.active);
+      if (active !== s) { failed = true; problems.push(`[${tag}] Pfeiltaste: Station ${active} statt ${s}`); }
+      await clickBar(page, tag, `s${s}`);
+    }
+    const n = await page.evaluate(() => window.__app.views.length);
+    for (let i = 1; i <= n; i++) {
+      await page.keyboard.press(String(i));
+      await page.waitForTimeout(1500);
+      const id = await page.evaluate(() => window.__app.view);
+      await page.screenshot({ path: `${out}${tag}-3-station${s}-view${i}-${id}.png` });
+    }
+  }
+
+  // Navigation per HTML-Button: Übersicht, dann HZV
+  if (N > 1) {
+    await page.getByRole('button', { name: 'Übersicht' }).click();
+    await page.waitForTimeout(2200);
+    if ((await page.evaluate(() => window.__app.active)) !== -1) { failed = true; problems.push(`[${tag}] Übersicht nicht aktiv`); }
+    await page.screenshot({ path: `${out}${tag}-4-uebersicht.png` });
+    await page.getByRole('button', { name: 'HZV', exact: true }).click();
+    await page.waitForTimeout(1800);
+    if ((await page.evaluate(() => window.__app.active)) !== 1) { failed = true; problems.push(`[${tag}] Nav-Button HZV wirkt nicht`); }
+  }
+  await page.close();
+}
+
+async function clickBar(page, tag, label) {
+  await page.evaluate(() => window.__app.chart.select(-1));
   const target = await page.evaluate(() => {
     const { chart, renderer, camera, THREE } = window.__app;
     const cells = chart.model.cells;
-    const ci = cells.findIndex((c) => c.x === 9 && c.z === 2);
+    // vorderste Reihe (nichts davor), rechts der Mitte (bei Monaten: Oktober)
+    const nx = chart.model.xLabels.length;
+    let ci = cells.findIndex((c) => c.x === Math.round(nx * 0.75) && c.z === 0);
+    if (ci < 0) ci = 0;
     const v = chart.cellTop(ci, new THREE.Vector3());
-    v.y -= 0.03;
+    v.y -= 0.01;
     chart.localToWorld(v);
     v.project(camera);
     const r = renderer.domElement.getBoundingClientRect();
@@ -50,18 +90,7 @@ async function run(viewport, tag) {
   await page.mouse.up();
   await page.waitForTimeout(700);
   const selected = await page.evaluate(() => window.__app.chart.selected);
-  if (selected !== target.ci) { failed = true; problems.push(`[${tag}] Klick auf Balken hat nicht ausgewählt (selected=${selected}, erwartet ${target.ci})`); }
-  await page.screenshot({ path: `${out}${tag}-2-tooltip.png` });
-
-  // Alle Ansichten per Taste durchschalten
-  const n = await page.evaluate(() => window.__app.views.length);
-  for (let i = 1; i <= n; i++) {
-    await page.keyboard.press(String(i));
-    await page.waitForTimeout(1700);
-    const id = await page.evaluate(() => window.__app.view);
-    await page.screenshot({ path: `${out}${tag}-3-view${i}-${id}.png` });
-  }
-  await page.close();
+  if (selected !== target.ci) { failed = true; problems.push(`[${tag}/${label}] Klick auf Balken hat nicht ausgewählt (selected=${selected}, erwartet ${target.ci})`); }
 }
 
 try {
@@ -77,6 +106,6 @@ try {
 
 const relevant = problems.filter((p) => !/GPU stall|swiftshader|WebGL.*(performance|fallback)|Automatic fallback/i.test(p));
 if (relevant.length) console.log(relevant.join('\n'));
-console.log(relevant.length || failed ? `FEHLER (${relevant.length} Meldungen)` : 'OK – keine Konsolenfehler, Balkenklick funktioniert');
+console.log(relevant.length || failed ? `FEHLER (${relevant.length} Meldungen)` : 'OK – keine Konsolenfehler, alle Stationen erreichbar, Balkenklick funktioniert');
 console.log(`Screenshots: ${out}`);
 process.exit(relevant.length || failed ? 1 : 0);

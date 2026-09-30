@@ -16,9 +16,18 @@ export const DIM = {
 };
 
 const LAYOUTS = {
-  months: { pitchZ: 0.11, w: 0.044, d: 0.064 },
-  heatmap: { pitchZ: 0.066, w: 0.062, d: 0.058 },
+  months: { pitchX: DIM.pitchX, pitchZ: 0.11, w: 0.044, d: 0.064, label: 0.021 },
+  heatmap: { pitchX: DIM.pitchX, pitchZ: 0.066, w: 0.062, d: 0.058, label: 0.021 },
+  // wenige, breite Spalten (Jahresrechnung, Altersgruppen, Benchmark) – Abstand je nach Spaltenzahl
+  categories: { pitchX: 0.105, pitchZ: 0.11, w: 0.064, d: 0.064, label: 0.019 },
 };
+
+function layoutOf(model) {
+  const L = LAYOUTS[model.layout] || LAYOUTS.months;
+  if (model.layout !== 'categories') return L;
+  const pitchX = Math.min(0.17, 0.84 / model.xLabels.length);
+  return { ...L, pitchX, w: Math.min(0.09, pitchX * 0.62), label: pitchX > 0.12 ? 0.021 : 0.019 };
+}
 
 const easeOutExpo = (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
 const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -126,17 +135,28 @@ export class Chart extends THREE.Group {
     this.grid = new THREE.LineSegments(lineGeo, this.gridMat);
     g.add(this.grid);
 
-    const plateLines = [];
-    const y = 0.0006;
-    plateLines.push(-hw, y, -hd, hw, y, -hd, hw, y, -hd, hw, y, hd, hw, y, hd, -hw, y, hd, -hw, y, hd, -hw, y, -hd);
-    for (let i = 1; i < 12; i++) {
-      const x = (i - 6) * DIM.pitchX;
-      plateLines.push(x, y, -hd, x, y, hd);
-    }
-    const pg = new THREE.BufferGeometry();
-    pg.setAttribute('position', new THREE.Float32BufferAttribute(plateLines, 3));
     this.plateLinesMat = new THREE.LineBasicMaterial({ color: COLORS.grid, transparent: true, opacity: 0.22, depthWrite: false, toneMapped: false });
-    g.add(new THREE.LineSegments(pg, this.plateLinesMat));
+    this.plateLines = new THREE.LineSegments(new THREE.BufferGeometry(), this.plateLinesMat);
+    g.add(this.plateLines);
+    this.buildPlateLines(12, DIM.pitchX);
+  }
+
+  // Umriss des Sockels + Trennlinien zwischen den Spalten
+  buildPlateLines(nx, pitch) {
+    const key = `${nx}|${pitch}`;
+    if (key === this.plateKey) return;
+    this.plateKey = key;
+    const hw = DIM.plateW / 2, hd = DIM.plateD / 2;
+    const y = 0.0006;
+    const pos = [-hw, y, -hd, hw, y, -hd, hw, y, -hd, hw, y, hd, hw, y, hd, -hw, y, hd, -hw, y, hd, -hw, y, -hd];
+    for (let i = 1; i < nx; i++) {
+      const x = (i - nx / 2) * pitch;
+      pos.push(x, y, -hd, x, y, hd);
+    }
+    this.plateLines.geometry.dispose();
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    this.plateLines.geometry = pg;
   }
 
   buildBars() {
@@ -208,7 +228,7 @@ export class Chart extends THREE.Group {
   }
 
   buildTooltip() {
-    this.tip = new CanvasPanel(640, 290, 0.28, { depthTest: false, renderOrder: 20 });
+    this.tip = new CanvasPanel(640, 340, 0.28, { depthTest: false, renderOrder: 20 });
     this.tip.setOpacity(0);
     this.tipFade = 0;
     this.add(this.tip);
@@ -245,10 +265,11 @@ export class Chart extends THREE.Group {
   // ---------- Ansichten ----------
 
   layoutPos(model, cell) {
-    const L = LAYOUTS[model.layout];
+    const L = layoutOf(model);
     const nx = model.xLabels.length;
     const nz = model.zLabels.length;
-    const x = (cell.x - (nx - 1) / 2) * DIM.pitchX;
+    const L0 = layoutOf(model);
+    const x = (cell.x - (nx - 1) / 2) * L0.pitchX;
     const z = (nz - 1 - cell.z - (nz - 1) / 2) * L.pitchZ;
     return { x, z, L };
   }
@@ -273,7 +294,8 @@ export class Chart extends THREE.Group {
     const tmp = new THREE.Color();
     cells.forEach((cell, ci) => {
       const { x, z, L } = this.layoutPos(model, cell);
-      let y0 = 0;
+      // schwebende Blöcke (Wasserfall) beginnen über dem Sockel
+      let y0 = cell.base ? Math.max(0, (cell.base / model.axisMax) * DIM.maxH) : 0;
       cell.segments.forEach((seg, si) => {
         const i = si * nc + ci;
         if (i >= n) return;
@@ -294,7 +316,7 @@ export class Chart extends THREE.Group {
       if (this.cellOf[i] >= 0) continue;
       const o = i * STRIDE;
       if (this.from[o + 3] === 0) { // noch nie benutzt
-        const L = LAYOUTS[model.layout];
+        const L = layoutOf(model);
         this.from[o + 3] = this.to[o + 3] = L.w;
         this.from[o + 5] = this.to[o + 5] = L.d;
       }
@@ -312,15 +334,18 @@ export class Chart extends THREE.Group {
     this.animT = instant ? 1e9 : 0;
     this.animDone = false;
 
+    this.buildPlateLines(model.xLabels.length, layoutOf(model).pitchX);
     this.updateAxes(model, !this.hasShownAxes);
     this.setTitle(model);
     if (this.selected >= 0 && (this.selected >= nc || layoutChange)) this.select(-1);
     else if (this.selected >= 0) this.drawTooltip();
   }
 
-  // Intro: Balken wachsen gestaffelt aus dem Sockel (ca. 1,5 s)
-  playIntro() {
+  // Intro: Balken wachsen gestaffelt aus dem Sockel (ca. 1,5 s).
+  // delay: Wartezeit in s, damit mehrere Stationen nacheinander erscheinen.
+  playIntro(delay = 0) {
     this.introT = 0;
+    this.introWait = delay;
     this.setIntroProgress(0);
     const n = this.poolSize;
     for (let i = 0; i < n; i++) {
@@ -330,11 +355,11 @@ export class Chart extends THREE.Group {
       this.from[o + 1] = 0;
       const ci = this.cellOf[i];
       const cell = ci >= 0 ? this.model.cells[ci] : null;
-      const seg = i >= this.model.cells.length ? 1 : 0;
-      this.delay[i] = cell ? 0.35 + cell.x * 0.045 + cell.z * 0.1 + seg * 0.12 : 0;
+      const seg = Math.floor(i / this.model.cells.length);
+      this.delay[i] = cell ? 0.35 + cell.x * (0.5 / this.model.xLabels.length) + cell.z * 0.1 + seg * 0.09 : 0;
     }
     this.cur.set(this.from);
-    this.animT = 0;
+    this.animT = -delay;
     this.animDur = 0.8;
     this.animEase = easeOutExpo;
     this.animDone = false;
@@ -363,12 +388,13 @@ export class Chart extends THREE.Group {
   }
 
   updateAxes(model, hidden) {
-    const L = LAYOUTS[model.layout];
+    const L = layoutOf(model);
     const nx = model.xLabels.length;
     const nz = model.zLabels.length;
     this.xLabels.forEach((l, i) => {
       if (i < nx) {
-        l.position.set((i - (nx - 1) / 2) * DIM.pitchX, 0.012, DIM.plateD / 2 + 0.03);
+        if (l.opts.size !== L.label) { l.opts.size = L.label; l.text = null; }
+        l.position.set((i - (nx - 1) / 2) * L.pitchX, 0.012, DIM.plateD / 2 + 0.03);
         if (hidden) { l.setText(model.xLabels[i]); l.show(false); } else { l.transitionTo(model.xLabels[i]); }
       } else l.show(false);
     });
@@ -401,10 +427,10 @@ export class Chart extends THREE.Group {
     this.title.draw((ctx, w, h) => {
       ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = COLORS.ink;
-      ctx.font = `700 104px ${FONT.family}`;
+      fitFont(ctx, model.title, 700, 104, w - 16);
       ctx.fillText(model.title, 8, 118);
       ctx.fillStyle = COLORS.inkMuted;
-      ctx.font = `500 50px ${FONT.family}`;
+      fitFont(ctx, model.subtitle, 500, 50, w - 20);
       ctx.fillText(model.subtitle, 10, 196);
       let x = 10;
       if (model.legend) {
@@ -435,10 +461,15 @@ export class Chart extends THREE.Group {
     const cell = this.model.cells[this.selected];
     if (!cell) return;
     const info = cell.tooltip();
+    const lines = info.lines.slice(0, 3);
     this.tip.draw((ctx, w, h) => {
       const pad = 30;
+      const maxW = w - pad * 2;
+      // Höhe nach Zeilenzahl; unten bündig, damit der Tooltip immer auf der Führungslinie sitzt
+      const boxH = 176 + Math.max(0, lines.length - 1) * 50 + (lines.length ? 54 : 0);
+      const top = h - boxH;
       ctx.fillStyle = COLORS.panel;
-      roundRect(ctx, 3, 3, w - 6, h - 6, 28);
+      roundRect(ctx, 3, top + 3, w - 6, boxH - 6, 28);
       ctx.fill();
       ctx.strokeStyle = 'rgba(228,138,82,0.75)';
       ctx.lineWidth = 3;
@@ -446,14 +477,14 @@ export class Chart extends THREE.Group {
 
       ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = COLORS.inkMuted;
-      ctx.font = `600 38px ${FONT.family}`;
-      ctx.fillText(info.heading, pad, 64);
+      fitFont(ctx, info.heading, 600, 38, maxW);
+      ctx.fillText(info.heading, pad, top + 64);
       ctx.fillStyle = COLORS.ink;
-      ctx.font = `700 78px ${FONT.family}`;
-      ctx.fillText(info.value, pad - 2, 146);
+      fitFont(ctx, info.value, 700, 78, maxW);
+      ctx.fillText(info.value, pad - 2, top + 146);
 
-      let y = 200;
-      for (const line of info.lines.slice(0, 2)) {
+      let y = top + 200;
+      for (const line of lines) {
         ctx.font = `600 34px ${FONT.family}`;
         if (line.chips) {
           let x = pad;
@@ -470,10 +501,11 @@ export class Chart extends THREE.Group {
           const col = up ? COLORS.glow : COLORS.accent;
           drawTrendArrow(ctx, pad + 12, y - 12, 24, up, col);
           ctx.fillStyle = col;
+          fitFont(ctx, line.text, 600, 34, maxW - 38);
           ctx.fillText(line.text, pad + 38, y);
         } else {
           ctx.fillStyle = line.muted ? COLORS.inkFaint : COLORS.ink;
-          ctx.font = `500 32px ${FONT.family}`;
+          fitFont(ctx, line.text, 500, 32, maxW);
           ctx.fillText(line.text, pad, y);
         }
         y += 50;
@@ -485,9 +517,8 @@ export class Chart extends THREE.Group {
   cellTop(ci, out) {
     const nc = this.model.cells.length;
     let top = 0, x = 0, z = 0;
-    for (let s = 0; s < 2; s++) {
-      const i = s * nc + ci;
-      if (i >= this.poolSize || this.cellOf[i] !== ci) continue;
+    for (let i = ci; i < this.poolSize; i += nc) {
+      if (this.cellOf[i] !== ci) continue;
       const o = i * STRIDE;
       x = this.cur[o]; z = this.cur[o + 2];
       top = Math.max(top, this.cur[o + 1] + this.cur[o + 4]);
@@ -559,7 +590,9 @@ export class Chart extends THREE.Group {
 
   update(dt, camPos) {
     // Intro-Fortschritt (Sockel, Linien)
-    if (this.introT >= 0) {
+    if (this.introWait > 0) {
+      this.introWait -= dt;
+    } else if (this.introT >= 0) {
       this.introT += dt;
       this.setIntroProgress(clamp01(this.introT / 1.1));
       if (this.introT > 1.2 && !this.hasShownAxes) this.showAxes();
@@ -653,6 +686,21 @@ export class Chart extends THREE.Group {
     } else this.hint.show(false);
     this.hint.update(dt, camPos);
 
+    // Sanftes Umsetzen an eine neue Position (Vor mich holen)
+    if (this.glide) {
+      const g = this.glide;
+      const k = 1 - Math.exp(-dt * 5);
+      this.position.lerp(g.pos, k);
+      let dy = g.yaw - this.rotation.y;
+      dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      this.rotation.y += dy * k;
+      if (this.position.distanceToSquared(g.pos) < 1e-6 && Math.abs(dy) < 1e-3) {
+        this.position.copy(g.pos);
+        this.rotation.y = g.yaw;
+        this.glide = null;
+      }
+    }
+
     // Drehimpuls vom Ring
     if (Math.abs(this.spin) > 0.001) {
       this.rotation.y += this.spin * dt;
@@ -682,6 +730,13 @@ export class Chart extends THREE.Group {
     this.bars.instanceMatrix.needsUpdate = true;
     this.colorAttr.needsUpdate = true;
   }
+}
+
+// Schriftgröße so weit verkleinern, dass der Text in die Breite passt
+function fitFont(ctx, text, weight, px, maxW) {
+  ctx.font = `${weight} ${px}px ${FONT.family}`;
+  const w = ctx.measureText(text).width;
+  if (w > maxW) ctx.font = `${weight} ${Math.floor((px * maxW) / w)}px ${FONT.family}`;
 }
 
 function approach(v, target, step) {

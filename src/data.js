@@ -1,5 +1,5 @@
-// Lädt data.json und baut daraus die Ansichten (Views), die das Diagramm darstellt.
-// Wer eigene Daten einspielen will, muss nur data.json austauschen – Format siehe README.
+// Lädt data.json und baut aus Ansichts-Definitionen (siehe stations.js) die Modelle,
+// die ein Diagramm darstellt. Eigene Daten: nur data.json austauschen – Format siehe README.
 
 import { COLORS, fmt, MONTHS_LONG, MONTHS_SHORT, DAYS_LONG } from './theme.js';
 
@@ -19,78 +19,35 @@ function normalize(raw) {
 
   const byKey = new Map();
   for (const r of monthly) byKey.set(`${r.year}-${r.month}`, r);
+  const fields = new Set();
+  for (const r of monthly) for (const k of Object.keys(r)) if (typeof r[k] === 'number') fields.add(k);
 
   const params = new URLSearchParams(location.search);
   let indexMode = !!raw.settings?.indexMode;
   if (params.has('index')) indexMode = params.get('index') !== '0';
 
   const heat = raw.heatmap && Array.isArray(raw.heatmap.values) ? raw.heatmap : null;
+  const age = raw.altersstruktur && Array.isArray(raw.altersstruktur.jahre) && raw.altersstruktur.gruppen ? raw.altersstruktur : null;
+  const fallwerte = raw.fallwerte && Array.isArray(raw.fallwerte.jahre) && raw.fallwerte.kassen ? raw.fallwerte : null;
+  const benchmark = raw.benchmark && Array.isArray(raw.benchmark.reihen) && raw.benchmark.felder ? raw.benchmark : null;
 
   return {
     meta: raw.meta || {},
     indexMode,
     years,
     record: (year, month) => byKey.get(`${year}-${month}`) || null,
+    has: (field) => fields.has(field),
     heatmap: heat,
+    altersstruktur: age,
+    fallwerte,
+    benchmark,
   };
 }
 
-// ---------- Ansichten ----------
+// ---------- Hilfen ----------
 
-const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
-const total = (r) => num(r.umsatz_hzv) + num(r.umsatz_kv) + num(r.umsatz_privat);
-
-// Monatsansichten: Jede liefert pro Monat 1–2 Segmente (gestapelt).
-export const MONTH_VIEWS = [
-  {
-    id: 'umsatz',
-    label: 'Umsatz gesamt',
-    title: 'Umsatz gesamt',
-    subtitle: 'Euro pro Monat',
-    segments: (r) => [total(r)],
-    format: fmt.euro,
-    tick: fmt.kEuro,
-  },
-  {
-    id: 'scheine',
-    label: 'Scheinzahlen',
-    title: 'Scheinzahlen',
-    subtitle: 'Behandlungsfälle pro Monat',
-    segments: (r) => [num(r.scheine)],
-    format: (v) => `${fmt.int(v)} Scheine`,
-    tick: fmt.int,
-  },
-  {
-    id: 'hzv',
-    label: 'HZV vs. KV',
-    title: 'Anteil HZV vs. KV',
-    subtitle: 'Umsatz nach Abrechnungsweg',
-    segments: (r) => [num(r.umsatz_hzv), num(r.umsatz_kv)],
-    segmentNames: ['HZV', 'KV'],
-    format: fmt.euro,
-    tick: fmt.kEuro,
-  },
-  {
-    id: 'fallwert',
-    label: 'Umsatz je Schein',
-    title: 'Umsatz je Schein',
-    subtitle: 'Euro pro Behandlungsfall',
-    segments: (r) => [num(r.scheine) > 0 ? total(r) / r.scheine : 0],
-    format: (v) => `${fmt.one(v)} €`,
-    tick: (v) => `${fmt.int(v)} €`,
-  },
-];
-
-export const HEATMAP_VIEW = {
-  id: 'heatmap',
-  label: 'Kontakte je Stunde',
-  title: 'Patientenkontakte',
-  subtitle: 'Wochentag × Uhrzeit, Ø pro Woche · Stoßzeiten in Kupfer',
-};
-
-export function availableViews(data) {
-  return data.heatmap ? [...MONTH_VIEWS, HEATMAP_VIEW] : [...MONTH_VIEWS];
-}
+export const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+export const sum = (a) => a.reduce((x, y) => x + y, 0);
 
 export function niceScale(max, count = 5) {
   if (!(max > 0)) return { max: count, step: 1 };
@@ -101,124 +58,157 @@ export function niceScale(max, count = 5) {
   return { max: step * count, step };
 }
 
-function yearColor(palette, yi, n) {
-  return palette[Math.max(0, palette.length - n + yi)];
+// Farbe einer Datenreihe (Slot 0–3) für ein Jahr: ältestes Jahr am dunkelsten
+export function seriesColor(slot, yi, n) {
+  const pal = COLORS.series[slot] || COLORS.series[0];
+  return pal[Math.max(0, pal.length - n + yi)];
+}
+export const legendColor = (slot) => (COLORS.series[slot] || COLORS.series[0])[2];
+
+function axis(max, tick, fixed) {
+  const ns = fixed || niceScale(max);
+  const ticks = [];
+  for (let i = 0; i <= 5; i++) ticks.push({ value: ns.step * i, text: tick(ns.step * i) });
+  return { axisMax: ns.max, ticks };
 }
 
-// Liefert ein vollständiges Modell für das Diagramm.
+// Vergleichszeile zum Vorjahr. kind: 'percent' (relativ), 'points' (Prozentpunkte), 'abs' (mit eigener Einheit)
+export function trendLine(cur, prev, { kind = 'percent', label = '', unit = '' } = {}) {
+  const pre = label ? `${label} ` : '';
+  if (kind === 'points') { const d = cur - prev; return { trend: d, text: `${pre}${fmt.signedPoints(d)} zum Vorjahr` }; }
+  if (kind === 'abs') { const d = cur - prev; return { trend: d, text: `${pre}${fmt.signedNum(d)} ${unit} zum Vorjahr` }; }
+  if (!(prev > 0)) return null;
+  const d = (cur / prev - 1) * 100;
+  return { trend: d, text: `${pre}${fmt.signedPercent(d)} zum Vorjahr` };
+}
+
+// Chips (Farbfeld + Text), höchstens `perLine` je Zeile
+export function chipLines(items, perLine = 2) {
+  const lines = [];
+  for (let i = 0; i < items.length; i += perLine) lines.push({ chips: items.slice(i, i + perLine) });
+  return lines;
+}
+
+// ---------- Ansichten bauen ----------
+
+export function viewAvailable(data, view) {
+  if (view.available) return view.available(data);
+  return (view.requires || []).every((f) => data.has(f));
+}
+
 export function buildView(data, view) {
-  return view.id === 'heatmap' ? buildHeatmap(data) : buildMonths(data, view);
+  if (view.layout === 'heatmap') return buildHeatmap(data, view);
+  if (view.build) return finishModel(view, view.build(data));
+  return buildMonths(data, view);
 }
 
+// Gemeinsamer Abschluss für frei gebaute Modelle (Kategorien × Jahre)
+function finishModel(view, m) {
+  return {
+    id: view.id,
+    title: view.title,
+    subtitle: view.subtitle,
+    legend: m.legend || null,
+    layout: view.layout || 'categories',
+    xLabels: m.xLabels,
+    zLabels: m.zLabels,
+    zColors: m.zColors,
+    ...axis(m.max, view.tick, m.scale),
+    cells: m.cells,
+  };
+}
+
+// Monate × Jahre, je Zelle 1–4 gestapelte Segmente
 function buildMonths(data, view) {
   const { years } = data;
   const n = years.length;
+  const indexMode = data.indexMode && view.indexable;
 
-  // Index-Basis: Durchschnitt der Monatswerte (Summe der Segmente) im ersten Jahr
   let base = 1;
-  if (data.indexMode) {
+  if (indexMode) {
     const vals = [];
     for (let m = 1; m <= 12; m++) {
       const r = data.record(years[0], m);
-      if (r) vals.push(view.segments(r).reduce((a, b) => a + b, 0));
+      if (r) vals.push(sum(view.segments(r)));
     }
-    base = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length / 100 : 1;
+    base = vals.length ? sum(vals) / vals.length / 100 : 1;
   }
-  const scale = (v) => v / base;
-  const format = data.indexMode ? (v) => `${fmt.one(v)} %` : view.format;
-  const tick = data.indexMode ? (v) => `${fmt.int(v)} %` : view.tick;
+  const format = indexMode ? (v) => `${fmt.one(v)} %` : view.format;
+  const tick = indexMode ? (v) => `${fmt.int(v)} %` : view.tick;
+  const slots = view.slots || [0, 1, 2, 3];
+  // Reihenfolge der Jahre in der Tiefe: normal das älteste vorne; bei fallenden Werten das aktuelle
+  const order = (a) => (view.latestFront ? [...a].reverse() : a);
 
   const cells = [];
   let max = 0;
   years.forEach((year, yi) => {
     for (let m = 1; m <= 12; m++) {
       const r = data.record(year, m);
-      const segs = r ? view.segments(r).map(scale) : [];
-      const sum = segs.reduce((a, b) => a + b, 0);
-      max = Math.max(max, sum);
-      const palettes = [COLORS.years, COLORS.yearsCopper];
+      const segs = r ? view.segments(r).map((v) => Math.max(0, v / base)) : [];
+      max = Math.max(max, sum(segs));
       cells.push({
         x: m - 1,
-        z: yi,
-        segments: segs.map((v, si) => ({ value: v, color: yearColor(palettes[si] || COLORS.years, yi, n) })),
-        tooltip: () => monthTooltip(data, view, year, m, format),
+        z: view.latestFront ? n - 1 - yi : yi,
+        segments: segs.map((v, si) => ({ value: v, color: seriesColor(slots[si], yi, n) })),
+        tooltip: () => monthTooltip(data, view, year, m, format, base),
       });
     }
   });
 
-  const ns = niceScale(max);
-  const ticks = [];
-  for (let i = 0; i <= 5; i++) ticks.push({ value: ns.step * i, text: tick(ns.step * i) });
-
-  const legend = view.segmentNames
-    ? view.segmentNames.map((name, i) => ({ name, color: [COLORS.years, COLORS.yearsCopper][i][2] }))
-    : null;
-
   return {
     id: view.id,
-    title: view.title + (data.indexMode ? ' (Index)' : ''),
-    subtitle: data.indexMode ? `Index, Ø ${years[0]} = 100 %` : `${view.subtitle}, ${years[0]}–${years[n - 1]}`,
-    legend,
+    title: view.title + (indexMode ? ' (Index)' : ''),
+    subtitle: indexMode ? `Index, Ø ${years[0]} = 100 %` : `${view.subtitle}, ${years[0]}–${years[n - 1]}`,
+    legend: view.names ? view.names.map((name, i) => ({ name, color: legendColor(slots[i]) })) : null,
     layout: 'months',
     xLabels: MONTHS_SHORT,
-    zLabels: years.map(String),
-    zColors: years.map((_, yi) => yearColor(COLORS.years, yi, n)),
-    axisMax: ns.max,
-    ticks,
+    zLabels: order(years.map(String)),
+    zColors: order(years.map((_, yi) => seriesColor(slots[0], yi, n))),
+    ...axis(max, tick),
     cells,
   };
 }
 
-function monthTooltip(data, view, year, m, format) {
+function monthTooltip(data, view, year, m, format, base) {
   const r = data.record(year, m);
-  const heading = `${MONTHS_LONG[m - 1]} ${year}`;
+  const heading = `${MONTHS_LONG[m - 1]} ${year}${view.headingSuffix ? ` · ${view.headingSuffix}` : ''}`;
   if (!r) return { heading, value: 'keine Daten', lines: [] };
 
   const segs = view.segments(r);
-  const sum = segs.reduce((a, b) => a + b, 0);
-  const shown = data.indexMode ? sum / indexBase(data, view) : sum;
-  const lines = [];
+  const total = sum(segs);
   const prev = data.record(year - 1, m);
+  const slots = view.slots || [0, 1, 2, 3];
+  let lines = [];
 
-  if (view.segmentNames) {
-    const shareH = sum > 0 ? (segs[0] / sum) * 100 : 0;
-    lines.push({
-      chips: [
-        { color: COLORS.years[2], text: `${view.segmentNames[0]} ${fmt.int(shareH)} %` },
-        { color: COLORS.yearsCopper[2], text: `${view.segmentNames[1]} ${fmt.int(100 - shareH)} %` },
-      ],
-    });
-    if (prev) {
-      const ps = view.segments(prev);
-      const psum = ps.reduce((a, b) => a + b, 0);
-      const prevShare = psum > 0 ? (ps[0] / psum) * 100 : 0;
-      const d = shareH - prevShare;
-      lines.push({ trend: d, text: `HZV-Anteil ${fmt.signedPoints(d)} zum Vorjahr` });
-    }
-  } else if (prev) {
-    const psum = view.segments(prev).reduce((a, b) => a + b, 0);
-    if (psum > 0) {
-      const d = (sum / psum - 1) * 100;
-      lines.push({ trend: d, text: `${fmt.signedPercent(d)} zum Vorjahr` });
-      const prevShown = data.indexMode ? psum / indexBase(data, view) : psum;
-      lines.push({ muted: true, text: `${MONTHS_SHORT[m - 1]} ${year - 1}: ${format(prevShown)}` });
-    }
+  // Aufteilung der Segmente
+  if (view.names && view.chips !== false) {
+    const items = segs.map((v, i) => ({
+      color: legendColor(slots[i]),
+      text: `${(view.short || view.names)[i]} ${view.chips === 'value' ? (view.chipFormat || fmt.int)(v) : fmt.int(total > 0 ? (v / total) * 100 : 0) + ' %'}`,
+    }));
+    lines.push(...chipLines(items, view.chipsPerLine || 2));
   }
-  if (!prev) lines.push({ muted: true, text: 'Erstes Jahr – kein Vorjahreswert' });
+  if (view.lines) lines.push(...view.lines(r, prev, data).filter(Boolean));
 
-  return { heading, value: format(shown), lines };
+  if (prev) {
+    const cmp = view.compare || {};
+    const pick = cmp.of || sum;
+    const t = trendLine(pick(segs, r), pick(view.segments(prev), prev), cmp);
+    if (t) lines.push(t);
+    // Vorjahreswert, wenn noch Platz ist
+    if (!cmp.kind && !view.names && lines.length < 3) {
+      const pv = sum(view.segments(prev)) / base;
+      lines.push({ muted: true, text: `${MONTHS_SHORT[m - 1]} ${year - 1}: ${format(pv)}` });
+    }
+  } else if (lines.length < 3) {
+    lines.push({ muted: true, text: 'Erstes Jahr – kein Vorjahreswert' });
+  }
+
+  return { heading, value: (view.valueText || format)(total / base, r), lines };
 }
 
-function indexBase(data, view) {
-  const vals = [];
-  for (let m = 1; m <= 12; m++) {
-    const r = data.record(data.years[0], m);
-    if (r) vals.push(view.segments(r).reduce((a, b) => a + b, 0));
-  }
-  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length / 100 : 1;
-}
-
-function buildHeatmap(data) {
+// Wochentag × Uhrzeit
+function buildHeatmap(data, view) {
   const h = data.heatmap;
   const days = h.days;
   const hours = h.hours;
@@ -248,21 +238,16 @@ function buildHeatmap(data) {
     });
   });
 
-  const ns = niceScale(max);
-  const ticks = [];
-  for (let i = 0; i <= 5; i++) ticks.push({ value: ns.step * i, text: fmt.int(ns.step * i) });
-
   return {
-    id: 'heatmap',
-    title: h.title || HEATMAP_VIEW.title,
-    subtitle: HEATMAP_VIEW.subtitle,
+    id: view.id,
+    title: h.title || view.title,
+    subtitle: view.subtitle,
     legend: null,
     layout: 'heatmap',
     xLabels: hours.map((x, i) => (i === hours.length - 1 ? `${x} Uhr` : `${x}`)),
     zLabels: days,
     zColors: days.map(() => COLORS.inkMuted),
-    axisMax: ns.max,
-    ticks,
+    ...axis(max, fmt.int),
     cells,
   };
 }

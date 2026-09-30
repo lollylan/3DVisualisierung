@@ -2,7 +2,7 @@
 // (Absicherung gegen wackeliges WLAN im Vortragssaal).
 // Eigene Dateien: erst Netz, dann Cache. CDN (three.js): erst Cache, dann Netz.
 
-const CACHE = 'praxis-3d-v1';
+const CACHE = 'praxis-3d-v2';
 const CORE = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const CORE = [
   './src/chart.js',
   './src/barMaterial.js',
   './src/data.js',
+  './src/stations.js',
   './src/input.js',
   './src/panel.js',
   './src/text.js',

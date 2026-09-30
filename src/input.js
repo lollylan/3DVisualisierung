@@ -1,5 +1,6 @@
 // Eingabe: Hände (Pinch), Controller (Trigger/Grip/Stick) und Maus am Desktop.
 // Alle Eingaben werden zu "Zeigern" mit Strahl + select-Start/-Ende vereinheitlicht.
+// Mehrere Stationen: Jeder Treffer weiß, zu welcher Station (Diagramm + Buttons) er gehört.
 
 import * as THREE from 'three';
 import { COLORS } from './theme.js';
@@ -7,16 +8,17 @@ import { COLORS } from './theme.js';
 const NEAR_GRAB = 0.11; // m – Hand direkt am Griff greift ohne Strahl
 
 export class Interaction {
-  constructor({ renderer, scene, camera, chart, panel, onButton, domElement }) {
+  constructor({ renderer, scene, camera, stations, onButton, onTouch, domElement }) {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
-    this.chart = chart;
-    this.panel = panel;
-    this.onButton = onButton;
+    this.stations = stations; // [{ chart, panel }]
+    this.onButton = onButton; // (station, id)
+    this.onTouch = onTouch || (() => {}); // (station) – jede Interaktion mit einer Station
     this.pointers = [];
-    this.grab = null; // { pointer, mode: 'move'|'ring', ... }
+    this.grab = null; // { pointer, chart, mode: 'move'|'ring', ... }
     this.enabled = true;
+    for (const st of stations) st.hover = { bar: -1, button: null, handle: false, ring: false };
 
     this.setupXR();
     this.setupMouse(domElement);
@@ -122,7 +124,7 @@ export class Interaction {
     });
     const up = () => {
       if (this.renderer.xr.isPresenting) return;
-      if (p.pendingDeselect) this.chart.select(-1);
+      if (p.pendingDeselect) this.deselectAll();
       p.pendingDeselect = false;
       this.onSelectEnd(p);
       this.controls && (this.controls.enabled = true);
@@ -141,11 +143,21 @@ export class Interaction {
     p.dir.set(0, 0, -1).transformDirection(p.object.matrixWorld);
   }
 
+  // Nächster Treffer über alle Stationen (Buttons, Balken, Griff, Ring)
   updatePointer(p) {
     this.pointerRay(p);
-    const a = this.panel.hitTest(p.origin, p.dir);
-    const b = this.chart.hitTest(p.origin, p.dir);
-    p.hit = a && b ? (a.t <= b.t ? a : b) : a || b;
+    let best = null;
+    for (const st of this.stations) {
+      if (!st.chart.visible) continue;
+      for (const h of [st.panel.hitTest(p.origin, p.dir), st.chart.hitTest(p.origin, p.dir)]) {
+        if (h && (!best || h.t < best.t)) best = { ...h, station: st };
+      }
+    }
+    p.hit = best;
+  }
+
+  deselectAll() {
+    for (const st of this.stations) st.chart.select(-1);
   }
 
   onSelectStart(p) {
@@ -153,26 +165,29 @@ export class Interaction {
     if (p.kind === 'xr') this.updatePointer(p);
 
     // Hand/Controller direkt am Griff?
-    if (p.kind === 'xr' && this.nearHandle(p)) return this.startMove(p, true);
+    const near = p.kind === 'xr' ? this.nearHandle(p) : null;
+    if (near) return this.startMove(p, near, true);
 
     const hit = p.hit;
     if (!hit) {
       // Maus: erst beim Loslassen ohne Ziehen abwählen (Ziehen = Kamera drehen)
       if (p.kind === 'mouse') p.pendingDeselect = true;
-      else this.chart.select(-1);
+      else this.deselectAll();
       return;
     }
+    const st = hit.station;
+    this.onTouch(st);
     if (hit.type === 'button') {
-      this.panel.press(hit.id);
+      st.panel.press(hit.id);
       this.pulse(p, 0.5, 40);
-      this.onButton(hit.id);
+      this.onButton(st, hit.id);
     } else if (hit.type === 'bar') {
-      this.chart.select(hit.index);
+      st.chart.select(hit.index);
       this.pulse(p, 0.3, 25);
     } else if (hit.type === 'handle') {
-      this.startMove(p, false);
+      this.startMove(p, st, false);
     } else if (hit.type === 'ring') {
-      this.startRing(p);
+      this.startRing(p, st);
     }
   }
 
@@ -180,8 +195,9 @@ export class Interaction {
     // Grip-Taste am Controller: Diagramm von überall greifen
     if (!this.enabled || this.grab) return;
     this.updatePointer(p);
-    if (this.nearHandle(p)) return this.startMove(p, true);
-    if (p.hit && p.hit.type !== 'button') this.startMove(p, false);
+    const near = this.nearHandle(p);
+    if (near) return this.startMove(p, near, true);
+    if (p.hit && p.hit.type !== 'button') this.startMove(p, p.hit.station, false);
   }
 
   onSelectEnd(p) {
@@ -199,43 +215,52 @@ export class Interaction {
     return out.copy(p.origin);
   }
 
+  // Station, deren Griff Hand oder Controller gerade direkt berührt (sonst null)
   nearHandle(p) {
-    this.chart.handle.getWorldPosition(_tmp);
-    return this.nearPoint(p, _near).distanceTo(_tmp) < NEAR_GRAB;
+    this.nearPoint(p, _near);
+    let best = null, bestD = NEAR_GRAB;
+    for (const st of this.stations) {
+      if (!st.chart.visible) continue;
+      const d = _near.distanceTo(st.chart.handle.getWorldPosition(_tmp));
+      if (d < bestD) { best = st; bestD = d; }
+    }
+    return best;
   }
 
-  startMove(p, near) {
-    const chart = this.chart;
+  startMove(p, st, near) {
+    const chart = st.chart;
+    this.onTouch(st);
     chart.updateMatrixWorld(true);
     p.object.updateMatrixWorld(true);
     // Versatz Zeiger -> Diagramm merken (starre Kopplung, nur Gierwinkel)
     const offset = new THREE.Matrix4().copy(p.object.matrixWorld).invert().multiply(chart.matrixWorld);
     this.grab = {
-      pointer: p, mode: 'move', near, offset,
+      pointer: p, chart, mode: 'move', near, offset,
       startTwist: this.twistAngle(p),
-      targetPos: chart.position.clone(),
-      targetYaw: chart.rotation.y,
     };
     chart.spin = 0;
+    chart.glide = null;
     chart.setHandleState('grab');
     chart.dismissHint();
     this.pulse(p, 0.6, 50);
   }
 
-  startRing(p) {
-    const a = this.chart.ringAngle(p.origin, p.dir);
+  startRing(p, st) {
+    const chart = st.chart;
+    const a = chart.ringAngle(p.origin, p.dir);
     if (a === null) return;
-    this.grab = { pointer: p, mode: 'ring', lastAngle: a, lastT: performance.now(), vel: 0 };
-    this.chart.spin = 0;
-    this.chart.dismissHint();
+    this.grab = { pointer: p, chart, mode: 'ring', lastAngle: a, lastT: performance.now(), vel: 0 };
+    chart.spin = 0;
+    chart.glide = null;
+    chart.dismissHint();
     this.pulse(p, 0.4, 30);
   }
 
   endGrab() {
     const g = this.grab;
     if (!g) return;
-    if (g.mode === 'ring') this.chart.spin = THREE.MathUtils.clamp(g.vel, -4, 4);
-    this.chart.setHandleState('idle');
+    if (g.mode === 'ring') g.chart.spin = THREE.MathUtils.clamp(g.vel, -4, 4);
+    g.chart.setHandleState('idle');
     this.grab = null;
   }
 
@@ -255,7 +280,7 @@ export class Interaction {
 
   updateGrab(dt) {
     const g = this.grab;
-    const chart = this.chart;
+    const chart = g.chart;
     const p = g.pointer;
     p.object.updateMatrixWorld(true);
 
@@ -301,7 +326,8 @@ export class Interaction {
 
   update(dt) {
     const xrActive = this.renderer.xr.isPresenting;
-    let hoverBar = -1, hoverButton = null, hoverHandle = false, hoverRing = false;
+    for (const st of this.stations) st.hover = { bar: -1, button: null, handle: false, ring: false };
+    let anyHover = false;
 
     for (const p of this.pointers) {
       const active = p.kind === 'xr' ? xrActive && p.connected : !xrActive && p.hasPos?.();
@@ -314,13 +340,17 @@ export class Interaction {
       const hit = this.grab?.pointer === p ? null : p.hit;
 
       if (hit) {
-        if (hit.type === 'bar') hoverBar = hit.index;
-        if (hit.type === 'button') hoverButton = hit.id;
-        if (hit.type === 'handle') hoverHandle = true;
-        if (hit.type === 'ring') hoverRing = true;
+        const h = hit.station.hover;
+        if (hit.type === 'bar') h.bar = hit.index;
+        if (hit.type === 'button') h.button = hit.id;
+        if (hit.type === 'handle') h.handle = true;
+        if (hit.type === 'ring') h.ring = true;
+        anyHover = true;
       }
-      if (this.grab?.pointer === p && this.grab.mode === 'ring') hoverRing = true;
-      if (p.kind === 'xr' && this.nearHandle(p)) hoverHandle = true;
+      if (p.kind === 'xr') {
+        const near = this.nearHandle(p);
+        if (near) near.hover.handle = true;
+      }
 
       // Strahl & Zielmarke
       if (p.kind === 'xr') {
@@ -338,26 +368,30 @@ export class Interaction {
         p.reticle.scale.setScalar(s);
       } else p.reticle.visible = false;
 
-      // Controller-Stick: Diagramm drehen
+      // Controller-Stick: das angezielte Diagramm drehen
       const axes = p.source?.gamepad?.axes;
-      if (axes && axes.length >= 4 && Math.abs(axes[2]) > 0.2 && !p.isHand) {
-        this.chart.rotation.y -= axes[2] * dt * 1.6;
+      if (axes && axes.length >= 4 && Math.abs(axes[2]) > 0.2 && !p.isHand && p.hit) {
+        p.hit.station.chart.rotation.y -= axes[2] * dt * 1.6;
       }
     }
 
     if (this.grab) {
       this.updateGrab(dt);
-      hoverHandle = hoverHandle || this.grab.mode === 'move';
+      const h = this.stations.find((st) => st.chart === this.grab.chart)?.hover;
+      if (h) { if (this.grab.mode === 'move') h.handle = true; else h.ring = true; }
     }
 
-    this.chart.setHover(hoverBar);
-    this.panel.setHover(hoverButton);
-    if (!this.grab) this.chart.setHandleState(hoverHandle ? 'hover' : 'idle');
-    this.chart.setRingHover(hoverRing);
+    for (const st of this.stations) {
+      const h = st.hover;
+      st.chart.setHover(h.bar);
+      st.panel.setHover(h.button);
+      if (this.grab?.chart !== st.chart) st.chart.setHandleState(h.handle ? 'hover' : 'idle');
+      st.chart.setRingHover(h.ring);
+    }
 
     // Mauszeiger am Desktop
     const el = this.renderer.domElement;
-    const cursor = hoverBar >= 0 || hoverButton || hoverHandle || hoverRing ? 'pointer' : '';
+    const cursor = anyHover ? 'pointer' : '';
     if (el.style.cursor !== cursor) el.style.cursor = cursor;
   }
 }

@@ -3,16 +3,17 @@
 //   node tools/csv-to-json.mjs monatswerte.csv [--heatmap kontakte.csv]
 //
 // Monatswerte-CSV (Trennzeichen ; oder , – Kopfzeile Pflicht, Reihenfolge egal):
-//   jahr;monat;umsatz_hzv;umsatz_kv;umsatz_privat;scheine
+//   jahr;monat;umsatz_hzv;umsatz_kv;umsatz_privat;scheine[;weitere Spalten]
 //   2023;1;28650;38472;8299;1265
+// Weitere bekannte Spalten (optional, jede fehlende blendet nur ihre Ansicht aus) – siehe README.
 // Zahlen dürfen deutsch formatiert sein ("28.650" oder "28650,50").
 //
 // Heatmap-CSV (optional): erste Spalte Wochentag, weitere Spalten = Stunden
 //   tag;7;8;9;10;11;12;13;14;15;16;17;18
 //   Mo;17;41;44;...
 //
-// Heatmap, Einstellungen (indexMode) und Titel aus der bestehenden data.json bleiben erhalten,
-// sofern keine neue Heatmap angegeben wird.
+// Heatmap, Altersstruktur, Fallwerte, Benchmark, Einstellungen (indexMode) und Titel aus der
+// bestehenden data.json bleiben erhalten, sofern keine neue Heatmap angegeben wird.
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -54,7 +55,9 @@ if (iYear === undefined || iMonth === undefined) {
   console.error('Die CSV braucht die Spalten "jahr" und "monat".');
   process.exit(1);
 }
-const fields = ['umsatz_hzv', 'umsatz_kv', 'umsatz_privat', 'scheine'];
+// Pflichtfelder (fehlen sie, werden sie 0) und alle weiteren Zahlenspalten der CSV
+const fields = [...new Set(['umsatz_hzv', 'umsatz_kv', 'umsatz_privat', 'scheine',
+  ...head.filter((h, i) => i !== iYear && i !== iMonth && /^[a-z_]+$/.test(h))])];
 const monthly = rows.slice(1).map((r, n) => {
   const rec = { year: num(r[iYear]), month: num(r[iMonth]) };
   if (!rec.year || !(rec.month >= 1 && rec.month <= 12)) {

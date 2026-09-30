@@ -58,7 +58,10 @@
       position: fixed; inset: 0;
       pointer-events: none;
       display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       grid-template-rows: auto 1fr auto;
+      grid-template-areas: "head nav" ". ." "enter keys";
+      gap: 1rem 2rem;
       padding: var(--gutter);
       opacity: 0;
       transition: opacity 600ms var(--ease-out);
@@ -67,7 +70,7 @@
     body.in-xr .overlay { opacity: 0; }
     .overlay button, .overlay a { pointer-events: auto; }
 
-    header { max-width: 34rem; }
+    header { grid-area: head; max-width: 34rem; }
     h1 {
       font: 700 clamp(1.5rem, 1.1rem + 1.6vw, 2.35rem)/1.15 Merriweather, Georgia, serif;
       margin: 0 0 0.45rem;
@@ -76,11 +79,39 @@
     }
     header p { margin: 0; color: var(--ink-muted); font-size: 1.05rem; max-width: 60ch; }
 
-    footer {
-      display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between;
-      gap: 1rem 2rem;
+    /* Stationen: eine Zeile, auf schmalen Bildschirmen seitlich scrollbar */
+    #stations {
+      grid-area: nav; align-self: start;
+      display: flex; gap: 0.35rem;
+      max-width: 100%;
+      padding: 0.3rem;
+      background: rgba(3, 28, 36, 0.72);
+      border: 1px solid rgba(70, 201, 225, 0.22);
+      border-radius: 999px;
+      overflow-x: auto;
+      scrollbar-width: none;
     }
-    .enter { display: grid; gap: 0.6rem; justify-items: start; }
+    #stations::-webkit-scrollbar { display: none; }
+    #stations[hidden] { display: none; }
+    #stations button {
+      flex: none;
+      font: 600 0.95rem/1 Barlow, sans-serif;
+      color: #CFE7ED;
+      background: transparent;
+      border: 0;
+      border-radius: 999px;
+      padding: 0.6rem 0.95rem 0.65rem;
+      cursor: pointer;
+      transition: background 160ms var(--ease-out), color 160ms var(--ease-out);
+    }
+    #stations button:hover { background: rgba(4, 72, 88, 0.9); color: var(--ink); }
+    #stations button[aria-current] { background: var(--petrol-light); color: #fff; }
+    #stations button:last-child { color: var(--ink-muted); }
+    #stations button:last-child[aria-current] { color: #fff; }
+    #stations button:focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; }
+    body.touring #stations { opacity: 0.6; }
+
+    .enter { grid-area: enter; align-self: end; display: grid; gap: 0.6rem; justify-items: start; }
     #enter-xr {
       font: 700 1.2rem/1 Barlow, sans-serif;
       letter-spacing: 0.01em;
@@ -100,6 +131,7 @@
     #xr-status { margin: 0; color: var(--ink-muted); font-size: 0.95rem; max-width: 46ch; min-height: 1.5em; }
 
     .keys {
+      grid-area: keys; align-self: end; justify-self: end;
       margin: 0; padding: 0; list-style: none;
       display: grid; grid-template-columns: auto auto; gap: 0.3rem 0.9rem;
       color: var(--ink-muted); font-size: 0.9rem;
@@ -121,13 +153,24 @@
       border-radius: 14px; padding: 1.1rem 1.3rem; line-height: 1.45;
     }
 
+    /* Schmaler: Stationen unten über dem Start-Button, damit sie den Diagrammtitel nicht verdecken */
+    @media (max-width: 1180px) {
+      .overlay {
+        grid-template-rows: auto 1fr auto auto;
+        grid-template-areas: "head head" ". ." "nav nav" "enter keys";
+      }
+      #stations { justify-self: start; }
+    }
     @media (max-width: 640px) {
+      .overlay { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "." "nav" "enter"; }
       .keys { display: none; }
+      #stations { flex-wrap: wrap; border-radius: 14px; }
+      #stations button { padding: 0.55rem 0.75rem 0.6rem; }
       #enter-xr { width: 100%; }
       .enter { width: 100%; justify-items: stretch; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .overlay, #enter-xr { transition: none; }
+      .overlay, #enter-xr, #stations button { transition: none; }
     }
   </style>
 </head>
@@ -137,22 +180,22 @@
   <div class="overlay">
     <header>
       <h1>Praxis-Kennzahlen im Raum</h1>
-      <p>Umsatz, Scheine und Sprechstunden einer Hausarztpraxis als Hologramm. Alle Zahlen sind fiktiv.</p>
+      <p>Sechs Hologramme im Kreis um dich: Umsatz, HZV, Finanzen, Personal, Patienten und ein Benchmark einer Hausarztpraxis. Alle Zahlen sind fiktiv.</p>
     </header>
-    <div></div>
-    <footer>
-      <div class="enter">
-        <button id="enter-xr" type="button" disabled>In den Raum holen</button>
-        <p id="xr-status" role="status">Prüfe WebXR …</p>
-      </div>
-      <ul class="keys" aria-label="Tastenkürzel am Desktop">
-        <li><kbd>Ziehen</kbd></li><li>Ansicht drehen</li>
-        <li><kbd>Klick</kbd></li><li>Balken: Wert anzeigen</li>
-        <li><kbd>1–5</kbd></li><li>Ansicht wechseln</li>
-        <li><kbd>R</kbd></li><li>Neu aufbauen</li>
-        <li><kbd>T</kbd></li><li>Automatische Tour (für Video)</li>
-      </ul>
-    </footer>
+    <nav id="stations" aria-label="Stationen" hidden></nav>
+    <div class="enter">
+      <button id="enter-xr" type="button" disabled>In den Raum holen</button>
+      <p id="xr-status" role="status">Prüfe WebXR …</p>
+    </div>
+    <ul class="keys" aria-label="Tastenkürzel am Desktop">
+      <li><kbd>Ziehen</kbd></li><li>Ansicht drehen</li>
+      <li><kbd>Klick</kbd></li><li>Balken: Wert anzeigen</li>
+      <li><kbd>← →</kbd></li><li>Station wechseln</li>
+      <li><kbd>1–5</kbd></li><li>Ansicht wechseln</li>
+      <li><kbd>0</kbd></li><li>Übersicht</li>
+      <li><kbd>R</kbd></li><li>Neu aufbauen</li>
+      <li><kbd>T</kbd></li><li>Automatische Tour (für Video)</li>
+    </ul>
   </div>
 
   <div id="error" role="alert" hidden></div>
